@@ -16,7 +16,7 @@ n_embd = 32
 torch.manual_seed(1337)
 
 # wget https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt
-with open('chatGPT-R2/input.txt', 'r', encoding='utf-8') as f:
+with open('input.txt', 'r', encoding='utf-8') as f:
     text = f.read()
 
 # here are all the unique characters that occur in this text
@@ -77,14 +77,14 @@ class Head(nn.Module):
         wei = q @ k.transpose(-2,-1) * C**-0.5 #(B, T, C)  @ (B, C, T) -> (B, T, T)
         wei = wei.masked_fill(self.tril[:T, :T]==0, float('-inf')) #set all future values to -inf , (B, T, T) 
         wei = F.softmax(wei, dim=-1) # (B, T, T)
-        out  = wei@v # apply the value matrix
+        out  = wei@v # apply the value matrix # (B, T, Head_Size)
         return out
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, num_heads, head_size):
         super().__init__()
         self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)]) #create a list of heads
-        self.proj = nn.Linear(n_embd, n_embd)
+        self.proj = nn.Linear(head_size * num_heads, n_embd) #head_size * num_heads dimension to become n_embd dimension
 
 
     def forward(self, x):

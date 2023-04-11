@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+#v5->v6 : Change hyperpararameters, change hard codings to hyperparemeters, better style, add dropout for less overfitting
 
 # hyperparameters
 batch_size = 64 # how many independent sequences will we process in parallel?
