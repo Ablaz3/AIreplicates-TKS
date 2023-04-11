@@ -63,7 +63,7 @@ def estimate_loss():
     return out
 
 class Head(nn.Module):
-    #a self attention head
+    """ a self attention head """ 
 
     def __init__(self, head_size):
         super().__init__()
@@ -71,19 +71,21 @@ class Head(nn.Module):
         self.query = nn.Linear(n_embd, head_size, bias=False)
         self.value = nn.Linear(n_embd, head_size, bias=False)
         self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size)))
+
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         B,T,C = x.shape
         k = self.key(x) # (B, T, Head_size)
         q = self.query(x) # (B, T, Head_size)
-        v = self.value(x) #(B, T, Head_size)
         # compute attention scores
         wei = q @ k.transpose(-2,-1) * k.shape[-1]**-0.5 #(B, T, Head_size)  @ (B, Head_size, T) -> (B, T, T)
         wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf')) #set all future values to -inf , (B, T, T) 
-        wei = F.softmax(wei, dim=1) # (B, T, T)
+        wei = F.softmax(wei, dim=-1) # (B, T, T)
         wei = self.dropout(wei)
-        out  = wei@v # apply the value matrix (B, T, T) -> (B, T, Head_size)
+
+        v = self.value(x) #(B, T, Head_size)
+        out = wei @ v # apply the value matrix (B, T, T) -> (B, T, Head_size)
         return out
 
 class MultiHeadAttention(nn.Module):
@@ -146,9 +148,7 @@ class GPTLanguageModel(nn.Module):
         self.ln_f = nn.LayerNorm(n_embd)
         #linear transformation layer, also changes n_embd features to vocab_size features, which we need since our
         #token embedding table is n_embd features tall, but logits must be vocab_size features tall
-        self.lm_head = nn.Linear(n_embd, vocab_size) 
-
-        #in the github for the project he mentions an apply init, but it is not covered in the video so I will omit it
+        self.lm_head = nn.Linear(n_embd, vocab_size)
 
     def forward(self, idx, targets=None):
         B, T = idx.shape

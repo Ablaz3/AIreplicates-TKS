@@ -76,7 +76,7 @@ class Head(nn.Module):
         # compute attention scores
         wei = q @ k.transpose(-2,-1) * C**-0.5 #(B, T, C)  @ (B, C, T) -> (B, T, T)
         wei = wei.masked_fill(self.tril[:T, :T]==0, float('-inf')) #set all future values to -inf , (B, T, T) 
-        wei = F.softmax(wei, dim=1) # (B, T, T)
+        wei = F.softmax(wei, dim=-1) # (B, T, T)
         out  = wei@v # apply the value matrix
         return out
 
