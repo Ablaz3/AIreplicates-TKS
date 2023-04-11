@@ -19,7 +19,7 @@ dropout = 0.2
 torch.manual_seed(1337)
 
 # wget https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt
-with open('chatGPT-R2/input.txt', 'r', encoding='utf-8') as f:
+with open('input.txt', 'r', encoding='utf-8') as f:
     text = f.read()
 
 # here are all the unique characters that occur in this text
@@ -41,7 +41,8 @@ val_data = data[n:]
 def get_batch(split):
     # generate a small batch of data of inputs x and targets y
     data = train_data if split == 'train' else val_data
-    ix = torch.randint(len(data) - block_size, (batch_size,))
+    #pytorch requires one dimensional tensor to be represented by a tuple with a trailing comma - (batch_size,):
+    ix = torch.randint(len(data) - block_size, (batch_size,)) 
     x = torch.stack([data[i:i+block_size] for i in ix])
     y = torch.stack([data[i+1:i+block_size+1] for i in ix])
     x, y = x.to(device), y.to(device)
@@ -70,32 +71,32 @@ class Head(nn.Module):
         self.query = nn.Linear(n_embd, head_size, bias=False)
         self.value = nn.Linear(n_embd, head_size, bias=False)
         self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size)))
-        self.dropout= nn.Dropout(dropout)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         B,T,C = x.shape
-        k = self.key(x) # (B, T C)
-        q = self.query(x) # (B, T, C)
-        v = self.value(x) #(B, T, C)
+        k = self.key(x) # (B, T, Head_size)
+        q = self.query(x) # (B, T, Head_size)
+        v = self.value(x) #(B, T, Head_size)
         # compute attention scores
-        wei = q @ k.transpose(-2,-1) * C**-0.5 #(B, T, C)  @ (B, C, T) -> (B, T, T)
-        wei = wei.masked_fill(self.tril[:T, :T]==0, float('-inf')) #set all future values to -inf , (B, T, T) 
+        wei = q @ k.transpose(-2,-1) * k.shape[-1]**-0.5 #(B, T, Head_size)  @ (B, Head_size, T) -> (B, T, T)
+        wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf')) #set all future values to -inf , (B, T, T) 
         wei = F.softmax(wei, dim=1) # (B, T, T)
         wei = self.dropout(wei)
-        out  = wei@v # apply the value matrix
+        out  = wei@v # apply the value matrix (B, T, T) -> (B, T, Head_size)
         return out
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, num_heads, head_size):
         super().__init__()
         self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)]) #create a list of heads
-        self.proj = nn.Linear(n_embd, n_embd)
+        self.proj = nn.Linear(head_size * num_heads, n_embd) #head_size * num_heads dimension to become n_embd dimension
         self.dropout = nn.Dropout(dropout)
 
 
     def forward(self, x):
-        out = torch.cat([h(x) for h in self.heads], dim=-1) #concatenate these heads
-        out = self.dropout(self.proj(out))
+        out = torch.cat([h(x) for h in self.heads], dim=-1) #concatenate these heads. (B, T, Head_size) -> (B, T, Head_size * num_heads)
+        out = self.dropout(self.proj(out)) #linear transformation + (B, T, Head_size) -> (B, T, n_embd) for correct out dimensions
         return out
 
 class FeedFoward(nn.Module):
@@ -126,26 +127,28 @@ class Block(nn.Module):
 
     def forward(self, x):
         #adds & layernorms per transformer architecture. Here layernorm is applied before the sublayer as is more common nowadays
-        x = x + self.sa(self.ln1(x)) 
-        x = x + self.ffwd(self.ln2(x))
+        x = x + self.sa(self.ln1(x)) #after attention
+        x = x + self.ffwd(self.ln2(x)) #after forward layer
         return x
 
     
 # super simple bigram model
-class BigramLanguageModel(nn.Module):
+class GPTLanguageModel(nn.Module):
 
     def __init__(self):
         super().__init__()
-        # each token directly reads off the logits for the next token from a lookup table
+        # each token directly reads off the logits for the next token from lookup table
         self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
         #positional encoding table, for each value in the block. does not necessarily have to have same dimensionality, n_embd
         #as the token embedding table, but does here
         self.position_embedding_table = nn.Embedding(block_size, n_embd)
-        self.blocks = nn.Sequential(*[Block(n_embd, n_head=n_head) for _ in range(n_layer)])
+        self.blocks = nn.Sequential(*[Block(n_embd, n_head=n_head) for _ in range(n_layer)]) # * because nn.Sequential takes separate arguments, not an iterable as input
         self.ln_f = nn.LayerNorm(n_embd)
         #linear transformation layer, also changes n_embd features to vocab_size features, which we need since our
         #token embedding table is n_embd features tall, but logits must be vocab_size features tall
         self.lm_head = nn.Linear(n_embd, vocab_size) 
+
+        #in the github for the project he mentions an apply init, but it is not covered in the video so I will omit it
 
     def forward(self, idx, targets=None):
         B, T = idx.shape
@@ -154,7 +157,7 @@ class BigramLanguageModel(nn.Module):
         tok_emb = self.token_embedding_table(idx) # (B,T, C=n_embd)
         pos_emb = self.position_embedding_table(torch.arange(T, device=device)) # (T, C=n_embd)
         x = tok_emb + pos_emb # (B, T, C=n_embd)
-        x = self.blocks(x) #run decoder blocks
+        x = self.blocks(x) #run decoder blocks (B, T, C=n_embd)
         x = self.ln_f(x) # (B, T, C=n_embd)
         logits = self.lm_head(x) # (B, T, C=vocab_size)
 
@@ -174,9 +177,9 @@ class BigramLanguageModel(nn.Module):
             #crop idx to the last set of block_size tokens
             idx_cond = idx[:, -block_size:]
             # get the predictions
-            logits, loss = self(idx_cond)
+            logits, loss = self(idx_cond) #targets = None, so no loss is calculated
             # focus only on the last time step
-            logits = logits[:, -1, :] # becomes (B, C)
+            logits = logits[:, -1, :] # becomes (B, C), and works because no loss is calcualted, so logits dimensions are (B, T, C)
             # apply softmax to get probabilities
             probs = F.softmax(logits, dim=-1) # (B, C)
             # sample from the distribution
@@ -185,7 +188,7 @@ class BigramLanguageModel(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
         return idx
 
-model = BigramLanguageModel()
+model = GPTLanguageModel()
 m = model.to(device)
 
 # create a PyTorch optimizer
@@ -193,8 +196,8 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
 for iter in range(max_iters):
 
-    # every once in a while evaluate the loss on train and val sets
-    if iter % eval_interval == 0:
+    # Evaluate loss every eval_interval, as well as the last iteration
+    if iter % eval_interval == 0 or iter == max_iters -1 :
         losses = estimate_loss()
         print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
 
@@ -209,4 +212,5 @@ for iter in range(max_iters):
 
 # generate from the model
 context = torch.zeros((1, 1), dtype=torch.long, device=device)
-print(decode(m.generate(context, max_new_tokens=500)[0].tolist()))
+open('output.txt', 'w').write(decode(m.generate(context, max_new_tokens=10000)[0].tolist()))
+#print(decode(m.generate(context, max_new_tokens=500)[0].tolist()))
