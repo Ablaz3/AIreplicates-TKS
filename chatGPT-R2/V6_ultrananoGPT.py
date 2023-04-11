@@ -99,7 +99,7 @@ class MultiHeadAttention(nn.Module):
 
     def forward(self, x):
         out = torch.cat([h(x) for h in self.heads], dim=-1) #concatenate these heads. (B, T, Head_size) -> (B, T, Head_size * num_heads)
-        out = self.dropout(self.proj(out)) #linear transformation + (B, T, Head_size) -> (B, T, n_embd) for correct out dimensions
+        out = self.dropout(self.proj(out)) #linear transformation + (B, T, Head_size * num_heads) -> (B, T, n_embd) for correct out dimensions
         return out
 
 class FeedFoward(nn.Module):
