@@ -1,6 +1,8 @@
 This folder is for replicating the project made by Andrej Karpathy on making a mini ChatGPT model. 
-link to the original project: https://www.youtube.com/watch?v=kCc8FmEb1nY&
+link to the original project, which I based this off of: https://www.youtube.com/watch?v=kCc8FmEb1nY&
 The model is trained on this dataset: https://github.com/karpathy/char-rnn/blob/master/data/tinyshakespeare/input.txt
+Medium article for the project: https://medium.com/@larsmartinbg/using-decoder-transformer-architecture-to-create-a-chatgpt-like-program-that-talks-like-shakespeare-e8f3cd2b5d74
+Youtube video for the project: https://www.youtube.com/watch?v=FBvPELHoyCo
 Just before undertaking this project, I wrote an article on how Transformes work. Check it out here: https://medium.com/@larsmartinbg/the-technical-abcs-of-transformers-in-deep-learning-df1b1b8b50dd
 
 
